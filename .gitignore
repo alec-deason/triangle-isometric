@@ -1,4 +1,8 @@
+out/*
 /target
+*~
+*.un
+*.swp
 /classes
 /checkouts
 pom.xml
