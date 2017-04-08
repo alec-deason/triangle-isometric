@@ -3,20 +3,22 @@
             [quil.middleware :as m]))
 (enable-console-print!)
 
+(def tile-width 16)
+(def half-width (/ tile-width 2))
+
 (defn make-triangle [color direction]
   ; Make the pixel grid for a triangle
-  (let [img (q/create-image 16 16 :argb)
-        comparitor (direction {:down-left (fn [i j] (<= i j))
-         :up-right (fn [i j] (> i j))
-         :up-left (fn [i j] (> (- 16 i) j))
-         :down-right (fn [i j] (<= (- 16 i) j))
-        })]
-    (dotimes [i 16]
-      (dotimes [j 16]
-        (when (comparitor i j) (q/set-pixel img i j (apply q/color color)))
+  (let [gr (q/create-graphics tile-width tile-width)]
+    (q/with-graphics gr
+      (apply q/stroke color)
+      (q/stroke-weight 0.5)
+      (apply q/fill color)
+      (case direction
+        :left (q/triangle 0 half-width tile-width 0 tile-width tile-width)
+        :right (q/triangle 0 0 0 tile-width tile-width half-width)
       )
     )
-    img
+    [gr true]
   )
 )
   
@@ -33,55 +35,106 @@
   )
 )
 
+(defn map-to-screen [x y z]
+  [(+ (- x y) 30) (- (+ x y) (* z 2))]
+)
+
+
+(defn draw-block [mx my mz view color_offset layer]
+  (let [[x y] (map-to-screen mx my mz)
+        idx (+ mx my mz layer)
+        color_offset (+ color_offset (* mz 3))]
+    (reduce-kv (fn [m k v] (assoc m k (vec (concat v (m k))))) view 
+               (if (even? x) {
+                           [x y] [[:left (+ 3 color_offset) idx]]
+                           [(+ x 1) y] [[:right (+ 3 color_offset) idx]]
+
+                           [(- x 1) (+ y 1)] [[:right (+ 2 color_offset) idx]]
+                           [x (+ y 2)] [[:left (+ 2 color_offset) idx]]
+
+                           [x (+ y 1)] [[:left (+ 1 color_offset) idx]]
+                           [(+ x 1) (+ y 2)] [[:right (+ 1 color_offset) idx]]
+                          }
+                           (let [x (- x 1)
+                                ]
+                          {
+                           [x y] [[:left (+ 3 color_offset) idx]]
+                           [(+ x 1) y] [[:right (+ 3 color_offset) idx]]
+
+                           [(+ x 1) (+ y 1)] [[:right (+ 2 color_offset) idx]]
+                           [x (+ y 2)] [[:left (+ 2 color_offset) idx]]
+
+                           [(+ x 2) (+ y 1)] [[:left (+ 1 color_offset) idx]]
+                           [(+ x 1) (+ y 2)] [[:right (+ 1 color_offset) idx]]
+                          }))
+
+    )
+    )
+)
+
+(defn triangles-for-block [mx my mz]
+  (let [[x y] (map-to-screen mx my mz)]
+               (if (even? x) [
+                           [x y]
+                           [(+ x 1) y]
+
+                           [(- x 1) (+ y 1)]
+                           [x (+ y 2)]
+
+                           [x (+ y 1)]
+                           [(+ x 1) (+ y 2)]
+                          ]
+                           (let [x (- x 1)
+                                ]
+                          [
+                           [x y]
+                           [(+ x 1) y]
+
+                           [(+ x 1) (+ y 1)]
+                           [x (+ y 2)]
+
+                           [(+ x 2) (+ y 1)]
+                           [(+ x 1) (+ y 2)]
+                          ]))
+
+    )
+)
+
 (defn make-view [grid]
-  (let [view (into {} (for [x (range 40) y (range 40)] [[x y] [[[:up-left 3] [:down-right 3]]]]))]
-    view
+  (let [view (into {} (for [x (range (/ (q/width) tile-width)) y (range (/ (q/height) half-width))] [[x y] [[(if (even? x) :left :right) 0 (- 0 js/Infinity)]]]))]
+    (reduce (fn [view [[x y z] b]] (if (= b :block) (draw-block x y z view 0 0) view)) view
+      (sort (fn [[[x y z] _] [[xx yy zz] _]] (< (+ x y z) (+ xx yy zz))) 
+            grid))
   )
 )
 
-(defn draw-block [mx my mz view]
-  (let [x (- mx my)
-        y (- (+ mx my) mz)
-       ]
-    (reduce-kv (fn [m k v] (assoc m k (vec (concat v (m k))))) view {
-                           [x y] [[[:down-right 1] [:up-left 1]]]
-                           [(+ x 1) y] [[[:down-left 1] [:up-right 2]]]
-                          }
-    )
-;    (q/set-image x y (nth (:triangles-down-right triangles) 1))
-;    (q/set-image (+ x 16) y (nth (:triangles-down-left triangles) 1))
-;
-;    (q/set-image x (+ y 16) (nth (:triangles-up-right triangles) 1))
-;    (q/set-image (+ x 16) (+ y 16) (nth (:triangles-up-left triangles) 1))
-;    (when (> mz 0) 
-;    (q/set-image x (+ y 16) (nth (:triangles-down-left triangles) 0))
-;    (q/set-image (+ x 16) (+ y 16) (nth (:triangles-down-right triangles) 2))
-;
-;    (q/set-image (+ x 16) (+ y 32) (nth (:triangles-up-left triangles) 2))
-;    (q/set-image x (+ y 32) (nth (:triangles-up-right triangles) 0))
-    )
-)
+(defn make-grid [] 
+  (apply hash-map (mapcat identity (mapcat identity
+  (for [k (range 2)]
+    (mapcat identity
+          
+    (for [i (range 40)]
+    (for [j (range 40)] [[i j k] (if (= k 0) (rand-nth (concat [:empty] (repeat 10 :block))) (rand-nth (concat (repeat 5 :empty) [:block])))] )))))
+)))
 
+(def n-colors 12)
 (defn setup []
   (q/background 0)
   ; Set frame rate to 30 frames per second.
   (q/frame-rate 30)
   (q/color-mode :rgb)
-  (let [colors (for [i (range 4)] [(* (/ 256 4) i) 255])]
+  (let [tint [(* (rand) 256) (* (rand) 256) (* (rand) 256)]
+        colors (for [i (range n-colors)] [(* (/ (nth tint 0) n-colors) i) (* (/ (nth tint 1) n-colors) i) (* (/ (nth tint 2) n-colors) i) 255])
+        grid (make-grid)]
     {
-    :up-left (for [i (range 4)] (make-triangle (nth colors i) :up-left))
-    :up-right (for [i (range 4)] (make-triangle (nth colors i)  :up-right))
-    :down-right (for [i (range 4)] (make-triangle (nth colors i) :down-right))
-    :down-left (for [i (range 4)] (make-triangle (nth colors i) :down-left))
-    :grid (for [k (range 2)]
-                (sort (fn [[x y _ _] [xx yy _ _]] (< (+ x y) (+ xx yy))) (mapcat identity
-                (for [i (range 20)]
-                (for [j (range 20)] [i j k (if (= k 0) :block (rand-nth [:block :empty :empty :empty :empty]))] )))))
-    :view (draw-block 20 10 1 (make-view nil))
-    :dood [10 10 0]
+    :left (for [i (range n-colors)] (make-triangle (nth colors i) :left))
+    :right (for [i (range n-colors)] (make-triangle (nth colors i)  :right))
+    :grid grid
+    :view (make-view grid)
+    :dood [18 15 1]
     :noise (for [_ (range 4)] (make-noise (* 20 32) (* 20 32)))
     :draw []
-    :dirty (for [x (range 20) y (range 20) z (range 2)] [x y z])
+    :dirty (for [x (range (/ (q/width) tile-width)) y (range (/ (q/height) half-width))] [x y])
     }
   )
 )
@@ -93,51 +146,61 @@
   )
 )
 
-(defn draw-dood [x y z]
-  (q/fill (q/color 240 240 0))
-  (q/ellipse (+ (* (- x y) 16) 316) (+ (+ (* (+ x y) 16) (* z 16)) 16) 16 16)
+(defn draw-triangle [x y img]
+        (let [xx (+ (* x tile-width) (if (odd? y) tile-width 0))
+            yy (* y half-width)
+           ]
+        (q/image img xx yy)
+      )
 )
+
+(defn draw-triangle-stacks [triangles x y & stacks]
+    (loop [stacks (map seq stacks)]
+      (let [current (map first stacks)
+            idx (apply max-key (concat [(fn [i] (nth (nth current i) 2))] (range (count current))))
+            [t1n t1i _] (nth current idx)
+            [img is-opaque] (nth (triangles t1n) t1i)]
+        (draw-triangle x y img)
+        (when (not is-opaque)
+          (recur (map-indexed (fn [i s] (if (= i idx) (next s) s)) stacks))
+        )
+      )
+    )
+)
+
 
 (defn draw-state [state]
-  (let [{grid :grid draw :draw noise :noise view :view} state]
-    (when (not-empty draw)
-    (doseq [[[x y] [[[t1n t1i] [t2n t2i]] & _]] view]
-      (q/set-image (* x 16) (* y 16) (nth (t1n state) t1i))
-      (q/set-image (* x 16) (* y 16) (nth (t2n state) t2i))
-    ))
-;    (when (not-empty draw)
-;      (doseq [slice grid]
-;        (doseq [[x y z b] slice] 
-;          (when (some #(= [x y z] %) draw)
-;            (when (= b :block) (draw-block x y z state))
-;            (when (= [x y z] (state :dood)) (draw-dood x y z))
-;          )
-;        )
-;        ;(apply q/blend (concat [(nth noise 0)] draw draw [:multiply]))
-;      )
-;    )
-  )
-)
-
-(defn neighborhood [x y, z] 
-  (for [dz (range -1 2)] [x y (+ z dz)])
+  (let [{grid :grid draw :draw noise :noise view :view} state
+        dood-view (apply draw-block (concat (:dood state) [{} 3 0]))]
+    (doseq [[x y] draw]
+      (let [
+            tile-stack (view [x y])
+            dood-stack (if (contains? dood-view [x y]) (dood-view [x y]) false) 
+            ]
+        (if dood-stack
+          (draw-triangle-stacks state x y tile-stack dood-stack)
+          (draw-triangle-stacks state x y tile-stack)
+        )
+      )
+  ))
 )
 
 (defn move-dood [state dx dy]
   (let [[ix iy iz] (state :dood)]
+    (if (and (= ((state :grid) [(+ ix dx) (+ iy dy) iz]) :empty)
+             (= ((state :grid) [(+ ix dx) (+ iy dy) (- iz 1)]) :block)
+        )
     (update
-      (assoc-in 
-        (assoc-in state [:dood 0] (+ ix dx))
-        [:dood 1] (+ iy dy))
-      :dirty (fn [x] (concat x (neighborhood ix iy iz) (neighborhood (+ ix dx) (+ iy dy) iz)))
-    )
+        (assoc state :dood [(+ ix dx) (+ iy dy) iz])
+        :dirty (fn [x] (concat x (triangles-for-block ix iy iz) (triangles-for-block (+ ix dx) (+ iy dy) iz)))
+    ) state)
   )
 )
 
 (defn on-key-down [state event]
   (case (:key event)
-    (:w :up) (move-dood state 0 1)
-    (:s :down) (move-dood state 0 -1)
+    (:w :up) (move-dood state 0 -1)
+    (:s :down) (move-dood state 0 1)
     (:a :left) (move-dood state -1 0)
     (:d :right) (move-dood state 1 0)
     state)
@@ -145,7 +208,7 @@
 
 (q/defsketch my-sketch
   :host "my-sketch"
-  :size [(* 20 32) (* 20 32)]
+  :size [(* 80 tile-width) (* 40 tile-width)]
   ; setup function called only once, during sketch initialization.
   :setup setup
   ; update-state is called on each iteration before draw-state.
