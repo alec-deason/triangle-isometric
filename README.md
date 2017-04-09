@@ -1,16 +1,7 @@
-# test-js
+This is a little experiment in learning Clojure and doing isometric graphics using (very simple) procedurally generated sprites.
 
-A Quil sketch designed to ... well, that part is up to you.
+It uses [Processing.js](http://processingjs.org/) via the [Quil](http://quil.info) bindings.
 
-## Usage
+You can try it out [here](index.html). Move with the arrow keys. Reload the page to get new terrain and a new color scheme.
 
-Run `lein compile` command and open `index.html` in your browser.
-
-For interactive development run `lein cljsbuild auto` command. This command will be recompiling cljs to js each time you modify `core.cljs` and you can see result immediately by refreshing page.
-
-## License
-
-Copyright © 2016 FIXME
-
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+![screenshot](screenshot.png)
